@@ -225,22 +225,32 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
     return () => c.removeEventListener("pointerdown", onDown);
   }, [running, reset, drop, showExtraLifeModal]);
 
-  // Handle game over and submit score to blockchain
-  const handleGameOver = useCallback(async (finalScore: number) => {
-    // Submit score to blockchain if connected and score > 0
-    if (isConnected && finalScore > 0) {
-      try {
-        await submitScoreToChain(finalScore);
+  // Submit score and start new game
+  const handleSubmitScoreAndPlayAgain = useCallback(async () => {
+    if (!isConnected) {
+      alert("Please connect your wallet first!");
+      return;
+    }
+
+    try {
+      if (score > 0) {
+        await submitScoreToChain(score);
         // Refetch to update leaderboard and player data
         setTimeout(() => {
           refetchPlayerData();
           refetchLeaderboard();
         }, 2000);
-      } catch (error) {
-        console.error("Failed to submit score:", error);
       }
+      reset();
+    } catch (error) {
+      console.error("Failed to submit score:", error);
     }
-  }, [isConnected, submitScoreToChain, refetchPlayerData, refetchLeaderboard]);
+  }, [isConnected, score, submitScoreToChain, refetchPlayerData, refetchLeaderboard, reset]);
+
+  // Handle game over - no automatic submission
+  const handleGameOver = useCallback(async (finalScore: number) => {
+    // Game over, wait for user action
+  }, []);
 
   // Drawing logic
   useEffect(() => {
@@ -560,11 +570,11 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
                 <button
                   onClick={handleBuyExtraLife}
                   disabled={isPending || isConfirming}
-                  className="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-4 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
+                  className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold py-4 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
                 >
                   {isPending || isConfirming ? (
                     <span className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
@@ -575,22 +585,41 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
                   )}
                 </button>
                 <button
-                  onClick={reset}
-                  className="w-full bg-[#314058] hover:bg-[#3d4d65] text-white font-bold py-4 px-6 rounded-lg transition-all"
+                  onClick={handleSubmitScoreAndPlayAgain}
+                  disabled={isPending || isConfirming}
+                  className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold py-4 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
                 >
-                  Start New Game
+                  {isPending || isConfirming ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Submitting...
+                    </span>
+                  ) : (
+                    "Submit Score & Play Again"
+                  )}
                 </button>
+                <div className="text-center mt-2">
+                  <button
+                    onClick={reset}
+                    className="text-gray-400 hover:text-gray-300 text-sm underline transition-colors"
+                  >
+                    or try again
+                  </button>
+                </div>
               </div>
             ) : (
               <div>
                 <p className="text-yellow-400 text-sm mb-4">
-                  Connect your wallet to buy extra lives!
+                  Connect your wallet to submit scores and buy extra lives!
                 </p>
                 <button
                   onClick={reset}
-                  className="w-full bg-[#314058] hover:bg-[#3d4d65] text-white font-bold py-4 px-6 rounded-lg transition-all"
+                  className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold py-4 px-6 rounded-lg transition-all shadow-lg"
                 >
-                  Start New Game
+                  Try Again
                 </button>
               </div>
             )}
