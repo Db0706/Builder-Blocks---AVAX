@@ -70,6 +70,7 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
     hash,
     playerData,
     refetchPlayerData,
+    refetchLeaderboard,
   } = useGameContract();
 
   useEffect(() => {
@@ -101,7 +102,21 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
   });
 
   // Reset game
-  const reset = useCallback(() => {
+  const reset = useCallback(async () => {
+    // Submit score to blockchain if connected and score > 0
+    if (isConnected && score > 0) {
+      try {
+        await submitScoreToChain(score);
+        // Refetch to update leaderboard and player data
+        setTimeout(() => {
+          refetchPlayerData();
+          refetchLeaderboard();
+        }, 2000);
+      } catch (error) {
+        console.error("Failed to submit score:", error);
+      }
+    }
+
     const s = state.current;
     s.hueSeed = 260 + Math.random() * 70;
     const base: Block = { x: START_X, w: START_WIDTH, row: 0, hue: s.hueSeed };
@@ -120,7 +135,7 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
     setRunning(true);
     setShowExtraLifeModal(false);
     setDeathPosition(null);
-  }, []);
+  }, [isConnected, score, submitScoreToChain, refetchPlayerData, refetchLeaderboard]);
 
   // Continue from death position with extra life
   const continueWithExtraLife = useCallback(() => {
