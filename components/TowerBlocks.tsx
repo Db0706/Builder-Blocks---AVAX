@@ -102,21 +102,7 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
   });
 
   // Reset game
-  const reset = useCallback(async () => {
-    // Submit score to blockchain if connected and score > 0
-    if (isConnected && score > 0) {
-      try {
-        await submitScoreToChain(score);
-        // Refetch to update leaderboard and player data
-        setTimeout(() => {
-          refetchPlayerData();
-          refetchLeaderboard();
-        }, 2000);
-      } catch (error) {
-        console.error("Failed to submit score:", error);
-      }
-    }
-
+  const reset = useCallback(() => {
     const s = state.current;
     s.hueSeed = 260 + Math.random() * 70;
     const base: Block = { x: START_X, w: START_WIDTH, row: 0, hue: s.hueSeed };
@@ -135,7 +121,7 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
     setRunning(true);
     setShowExtraLifeModal(false);
     setDeathPosition(null);
-  }, [isConnected, score, submitScoreToChain, refetchPlayerData, refetchLeaderboard]);
+  }, []);
 
   // Continue from death position with extra life
   const continueWithExtraLife = useCallback(() => {
@@ -239,12 +225,22 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
     return () => c.removeEventListener("pointerdown", onDown);
   }, [running, reset, drop, showExtraLifeModal]);
 
-  // This function is no longer needed as we submit score on reset only
-  // Keeping it for potential future use
+  // Handle game over and submit score to blockchain
   const handleGameOver = useCallback(async (finalScore: number) => {
-    // Score submission moved to reset() function
-    // This prevents wallet popup on game over
-  }, []);
+    // Submit score to blockchain if connected and score > 0
+    if (isConnected && finalScore > 0) {
+      try {
+        await submitScoreToChain(finalScore);
+        // Refetch to update leaderboard and player data
+        setTimeout(() => {
+          refetchPlayerData();
+          refetchLeaderboard();
+        }, 2000);
+      } catch (error) {
+        console.error("Failed to submit score:", error);
+      }
+    }
+  }, [isConnected, submitScoreToChain, refetchPlayerData, refetchLeaderboard]);
 
   // Drawing logic
   useEffect(() => {
