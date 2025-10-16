@@ -57,7 +57,9 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
   const [running, setRunning] = useState(false);
   const [showExtraLifeModal, setShowExtraLifeModal] = useState(false);
   const [deathPosition, setDeathPosition] = useState<{ row: number; x: number; w: number; hue: number } | null>(null);
+  const [isSubmittingScore, setIsSubmittingScore] = useState(false);
   const lastProcessedHashRef = useRef<string | null>(null);
+  const scoreSubmissionHashRef = useRef<string | null>(null);
 
   // Blockchain hooks
   const { address, isConnected } = useAccount();
@@ -232,20 +234,42 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
       return;
     }
 
-    try {
-      if (score > 0) {
-        await submitScoreToChain(score);
-        // Refetch to update leaderboard and player data
-        setTimeout(() => {
-          refetchPlayerData();
-          refetchLeaderboard();
-        }, 2000);
-      }
+    if (score === 0) {
       reset();
+      return;
+    }
+
+    try {
+      // Mark that we're submitting score
+      setIsSubmittingScore(true);
+      scoreSubmissionHashRef.current = null;
+      // Submit score - this will trigger wallet popup
+      await submitScoreToChain(score);
     } catch (error) {
       console.error("Failed to submit score:", error);
+      setIsSubmittingScore(false);
+      // Even if error, allow user to continue
+      reset();
     }
-  }, [isConnected, score, submitScoreToChain, refetchPlayerData, refetchLeaderboard, reset]);
+  }, [isConnected, score, submitScoreToChain, reset]);
+
+  // Monitor score submission transaction success
+  useEffect(() => {
+    if (isSubmittingScore && isSuccess && hash && hash !== scoreSubmissionHashRef.current) {
+      scoreSubmissionHashRef.current = hash;
+
+      // Wait for transaction confirmation, then refresh leaderboard
+      const refreshAndReset = async () => {
+        await refetchPlayerData();
+        await refetchLeaderboard();
+        setIsSubmittingScore(false);
+        reset();
+      };
+
+      // Small delay to ensure blockchain state is updated
+      setTimeout(refreshAndReset, 1500);
+    }
+  }, [isSubmittingScore, isSuccess, hash, refetchPlayerData, refetchLeaderboard, reset]);
 
   // Handle game over - no automatic submission
   const handleGameOver = useCallback(async (finalScore: number) => {
@@ -586,16 +610,16 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
                 </button>
                 <button
                   onClick={handleSubmitScoreAndPlayAgain}
-                  disabled={isPending || isConfirming}
+                  disabled={isPending || isConfirming || isSubmittingScore}
                   className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold py-4 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
                 >
-                  {isPending || isConfirming ? (
+                  {isPending || isConfirming || isSubmittingScore ? (
                     <span className="flex items-center justify-center">
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      Submitting...
+                      {isConfirming || (isSubmittingScore && isSuccess) ? "Confirming & Updating Leaderboard..." : "Submitting Score..."}
                     </span>
                   ) : (
                     "Submit Score & Play Again"
@@ -604,7 +628,8 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
                 <div className="text-center mt-2">
                   <button
                     onClick={reset}
-                    className="text-gray-400 hover:text-gray-300 text-sm underline transition-colors"
+                    disabled={isSubmittingScore}
+                    className="text-gray-400 hover:text-gray-300 text-sm underline transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     or try again
                   </button>
