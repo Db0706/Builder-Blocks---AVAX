@@ -131,6 +131,12 @@ export function useGameContractSecured() {
     if (!contractAddress) throw new Error('Contract not deployed on this chain');
     if (!address) throw new Error('Wallet not connected');
 
+    // Reset success state from any previous transaction
+    if (inArena) {
+      setArenaIsSuccess(false);
+      setArenaHash(undefined);
+    }
+
     // Check if Arena provider is actually available
     const sdk = inArena ? getArenaSDK() : null;
     const hasArenaProvider = sdk?.provider && sdk.provider !== null;
@@ -186,6 +192,13 @@ export function useGameContractSecured() {
 
     if (!contractAddress) throw new Error('Contract not deployed on this chain');
     if (!address) throw new Error('Wallet not connected');
+
+    // Reset success state from any previous transaction
+    if (inArena) {
+      console.log('🔄 Resetting previous transaction state before submitting score');
+      setArenaIsSuccess(false);
+      setArenaHash(undefined);
+    }
 
     try {
       // Request signature from backend

@@ -5,6 +5,7 @@ import { formatAddress } from "@/lib/utils";
 import { useAccount } from "wagmi";
 import { formatEther } from "viem";
 import { useState } from "react";
+import { useArena } from "@/components/ArenaProvider";
 
 export default function LeaderboardSecured() {
   const {
@@ -21,8 +22,12 @@ export default function LeaderboardSecured() {
     refetchBalance,
   } = useGameContractSecured();
 
-  const { address } = useAccount();
+  const { address: wagmiAddress } = useAccount();
+  const { arenaWalletAddress, isInArena } = useArena();
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+
+  // Use Arena wallet when in Arena, otherwise use wagmi wallet
+  const address = isInArena ? arenaWalletAddress : wagmiAddress;
 
   const [addresses, scores] = leaderboard || [[], []];
 
