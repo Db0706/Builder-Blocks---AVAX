@@ -74,7 +74,14 @@ export function useGameContractSecured() {
           console.log('✅ Arena transaction confirmed:', arenaHash);
           setArenaIsConfirming(false);
           setArenaIsSuccess(true);
-          // Data will auto-refresh due to refetchInterval on read contracts
+
+          // Immediately refetch game data after confirmation
+          console.log('🔄 Refetching game data after transaction...');
+          setTimeout(() => {
+            if (refetchPlayerData) refetchPlayerData();
+            if (refetchLeaderboard) refetchLeaderboard();
+            if (refetchBalance) refetchBalance();
+          }, 500);
         } else if (data.result && data.result.status === '0x0') {
           console.error('❌ Arena transaction failed on-chain');
           setArenaIsConfirming(false);
