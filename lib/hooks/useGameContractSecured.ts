@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { parseEther, encodeFunctionData, createWalletClient, custom } from 'viem';
+import { parseEther, encodeFunctionData } from 'viem';
 import { TOWER_BLOCKS_ABI_SECURED, CONTRACT_ADDRESSES } from '../contract-abi-secured';
 import { requestScoreSignature } from '../api/score-signing';
 import { getArenaSDK, isRunningInArena } from '../arena-sdk';
@@ -55,21 +55,25 @@ export function useGameContractSecured() {
       setArenaError(null);
 
       try {
-        const walletClient = createWalletClient({
-          account: address,
-          chain: chainConfig,
-          transport: custom(sdk.provider as any),
-        });
-
-        const txHash = await walletClient.writeContract({
-          address: contractAddress as `0x${string}`,
+        // Encode the function call
+        const data = encodeFunctionData({
           abi: TOWER_BLOCKS_ABI_SECURED,
           functionName: 'buyExtraLife',
-          value: parseEther('0.1'),
+        });
+
+        // Send transaction directly through Arena provider
+        const txHash = await sdk.provider.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: address,
+            to: contractAddress,
+            value: '0x16345785D8A0000', // 0.1 AVAX in hex (100000000000000000 wei)
+            data: data,
+          }],
         });
 
         console.log('✅ Arena transaction sent:', txHash);
-        setArenaHash(txHash);
+        setArenaHash(txHash as `0x${string}`);
         setArenaIsPending(false);
       } catch (error) {
         console.error('❌ Arena transaction failed:', error);
@@ -115,21 +119,25 @@ export function useGameContractSecured() {
         setArenaError(null);
 
         try {
-          const walletClient = createWalletClient({
-            account: address,
-            chain: chainConfig,
-            transport: custom(sdk.provider as any),
-          });
-
-          const txHash = await walletClient.writeContract({
-            address: contractAddress as `0x${string}`,
+          // Encode the function call with arguments
+          const data = encodeFunctionData({
             abi: TOWER_BLOCKS_ABI_SECURED,
             functionName: 'submitScore',
             args,
           });
 
+          // Send transaction directly through Arena provider
+          const txHash = await sdk.provider.request({
+            method: 'eth_sendTransaction',
+            params: [{
+              from: address,
+              to: contractAddress,
+              data: data,
+            }],
+          });
+
           console.log('✅ Arena transaction sent:', txHash);
-          setArenaHash(txHash);
+          setArenaHash(txHash as `0x${string}`);
           setArenaIsPending(false);
         } catch (error) {
           console.error('❌ Arena transaction failed:', error);

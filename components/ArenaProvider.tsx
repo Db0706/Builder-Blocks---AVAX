@@ -83,12 +83,10 @@ export function ArenaProvider({ children }: { children: ReactNode }) {
               const arenaConn = connectors.find(c => c.id === 'arena');
               if (arenaConn && !wagmiAddress) {
                 console.log('🔌 Connecting wagmi to Arena connector...');
-                const result = await connect({ connector: arenaConn });
-                console.log('✅ Wagmi connected to Arena provider', result);
+                await connect({ connector: arenaConn });
+                console.log('✅ Wagmi connected to Arena provider');
               } else if (!arenaConn) {
                 console.error('❌ Arena connector not found! Available connectors:', connectors.map(c => c.id));
-              } else if (wagmiAddress) {
-                console.log('✅ Wagmi already connected to:', wagmiAddress);
               }
             } catch (error) {
               console.error('❌ Failed to connect wagmi to Arena:', error);
