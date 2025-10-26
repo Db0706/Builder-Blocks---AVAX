@@ -36,17 +36,80 @@ export function useGameContractSecured() {
   // State for Arena transactions
   const [arenaHash, setArenaHash] = useState<`0x${string}` | undefined>();
   const [arenaIsPending, setArenaIsPending] = useState(false);
+  const [arenaIsConfirming, setArenaIsConfirming] = useState(false);
+  const [arenaIsSuccess, setArenaIsSuccess] = useState(false);
   const [arenaError, setArenaError] = useState<Error | null>(null);
 
   // Write functions (wagmi fallback)
   const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: inArena ? arenaHash : hash
+  const { isLoading: wagmiIsConfirming, isSuccess: wagmiIsSuccess } = useWaitForTransactionReceipt({
+    hash: !inArena ? hash : undefined // Only use wagmi receipt tracking when NOT in Arena
   });
+
+  // Poll for Arena transaction confirmation
+  useEffect(() => {
+    if (!inArena || !arenaHash || arenaIsSuccess) return;
+
+    console.log('🔍 Polling for Arena transaction confirmation:', arenaHash);
+    let cancelled = false;
+    setArenaIsConfirming(true);
+
+    const checkReceipt = async () => {
+      try {
+        const response = await fetch('https://api.avax.network/ext/bc/C/rpc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'eth_getTransactionReceipt',
+            params: [arenaHash],
+            id: Date.now(),
+          }),
+        });
+
+        const data = await response.json();
+        if (cancelled) return;
+
+        if (data.result && data.result.status === '0x1') {
+          console.log('✅ Arena transaction confirmed:', arenaHash);
+          setArenaIsConfirming(false);
+          setArenaIsSuccess(true);
+          // Data will auto-refresh due to refetchInterval on read contracts
+        } else if (data.result && data.result.status === '0x0') {
+          console.error('❌ Arena transaction failed on-chain');
+          setArenaIsConfirming(false);
+          setArenaError(new Error('Transaction failed on-chain'));
+        } else {
+          // Still pending, check again
+          setTimeout(checkReceipt, 1000);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to check transaction receipt:', error);
+          setTimeout(checkReceipt, 2000); // Retry on error
+        }
+      }
+    };
+
+    checkReceipt();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [arenaHash, inArena, arenaIsSuccess]);
+
+  // Reset Arena transaction state when starting new transaction
+  useEffect(() => {
+    if (arenaIsPending) {
+      setArenaIsSuccess(false);
+    }
+  }, [arenaIsPending]);
 
   // Use Arena states if in Arena, otherwise use wagmi states
   const effectiveHash = inArena ? arenaHash : hash;
   const effectiveIsPending = inArena ? arenaIsPending : isPending;
+  const effectiveIsConfirming = inArena ? arenaIsConfirming : wagmiIsConfirming;
+  const effectiveIsSuccess = inArena ? arenaIsSuccess : wagmiIsSuccess;
   const effectiveError = inArena ? arenaError : writeError;
 
   // Log any errors from the hook
@@ -336,8 +399,8 @@ export function useGameContractSecured() {
 
     // Transaction state (using Arena states if in Arena)
     isPending: effectiveIsPending,
-    isConfirming,
-    isSuccess,
+    isConfirming: effectiveIsConfirming,
+    isSuccess: effectiveIsSuccess,
     error: effectiveError,
     hash: effectiveHash,
 
