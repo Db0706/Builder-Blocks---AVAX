@@ -296,28 +296,106 @@ export function useGameContractSecured() {
     });
   };
 
-  // Read player data
-  const { data: playerData, refetch: refetchPlayerData } = useReadContract({
-    address: contractAddress as `0x${string}`,
-    abi: TOWER_BLOCKS_ABI_SECURED,
-    functionName: 'getPlayerData',
-    args: address ? [address as `0x${string}`] : undefined,
-    query: {
-      enabled: !!address && !!contractAddress,
-      refetchInterval: 5000,
-    },
-  });
+  // Manual RPC fetch for player data (to avoid wagmi caching in Arena)
+  const [playerData, setPlayerData] = useState<{ highScore: bigint; totalGamesPlayed: bigint; extraLivesPurchased: bigint; totalSpent: bigint } | undefined>();
 
-  // Read leaderboard
-  const { data: leaderboard, refetch: refetchLeaderboard } = useReadContract({
-    address: contractAddress as `0x${string}`,
-    abi: TOWER_BLOCKS_ABI_SECURED,
-    functionName: 'getLeaderboard',
-    query: {
-      enabled: !!contractAddress,
-      refetchInterval: 5000,
-    },
-  });
+  const refetchPlayerData = async () => {
+    if (!contractAddress || !address) return;
+
+    try {
+      // Encode getPlayerData(address) call
+      const data = encodeFunctionData({
+        abi: TOWER_BLOCKS_ABI_SECURED,
+        functionName: 'getPlayerData',
+        args: [address as `0x${string}`],
+      });
+
+      const response = await fetch('https://api.avax.network/ext/bc/C/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_call',
+          params: [{
+            to: contractAddress,
+            data: data,
+          }, 'latest'],
+          id: Date.now(),
+        }),
+      });
+
+      const result = await response.json();
+      if (result.result && result.result !== '0x') {
+        // Decode the result
+        const decoded = result.result;
+        // PlayerData struct: (uint256 highScore, uint256 totalGamesPlayed, uint256 extraLivesPurchased, uint256 totalSpent)
+        // Each uint256 is 32 bytes (64 hex chars), result starts with 0x
+        const highScore = BigInt('0x' + decoded.slice(2, 66));
+        const totalGamesPlayed = BigInt('0x' + decoded.slice(66, 130));
+        const extraLivesPurchased = BigInt('0x' + decoded.slice(130, 194));
+        const totalSpent = BigInt('0x' + decoded.slice(194, 258));
+
+        setPlayerData({
+          highScore,
+          totalGamesPlayed,
+          extraLivesPurchased,
+          totalSpent,
+        });
+
+        console.log('👤 Player data fetched:', { highScore: highScore.toString(), totalGamesPlayed: totalGamesPlayed.toString() });
+      }
+    } catch (error) {
+      console.error('Failed to fetch player data:', error);
+    }
+  };
+
+  // Manual RPC fetch for leaderboard (to avoid wagmi caching in Arena)
+  const [leaderboard, setLeaderboard] = useState<[readonly `0x${string}`[], readonly bigint[]] | undefined>();
+
+  const refetchLeaderboard = async () => {
+    if (!contractAddress) return;
+
+    try {
+      // Encode getLeaderboard() call
+      const data = encodeFunctionData({
+        abi: TOWER_BLOCKS_ABI_SECURED,
+        functionName: 'getLeaderboard',
+      });
+
+      const response = await fetch('https://api.avax.network/ext/bc/C/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_call',
+          params: [{
+            to: contractAddress,
+            data: data,
+          }, 'latest'],
+          id: Date.now(),
+        }),
+      });
+
+      const result = await response.json();
+      if (result.result && result.result !== '0x') {
+        // Decode the result - this is complex as it returns (address[], uint256[])
+        // For now, let's use a simpler approach: decode using viem
+        const { decodeAbiParameters } = await import('viem');
+        const decoded = decodeAbiParameters(
+          [
+            { name: 'addresses', type: 'address[]' },
+            { name: 'scores', type: 'uint256[]' }
+          ],
+          result.result as `0x${string}`
+        );
+
+        setLeaderboard([decoded[0] as readonly `0x${string}`[], decoded[1] as readonly bigint[]]);
+        console.log('🏆 Leaderboard fetched:', decoded[0].length, 'players');
+      }
+    } catch (error) {
+      console.error('Failed to fetch leaderboard:', error);
+    }
+  };
 
   // Read extra life price
   const { data: extraLifePrice } = useReadContract({
@@ -362,6 +440,20 @@ export function useGameContractSecured() {
   useEffect(() => {
     refetchBalance();
     const interval = setInterval(refetchBalance, 5000);
+    return () => clearInterval(interval);
+  }, [contractAddress]);
+
+  // Auto-refresh player data every 5 seconds
+  useEffect(() => {
+    refetchPlayerData();
+    const interval = setInterval(refetchPlayerData, 5000);
+    return () => clearInterval(interval);
+  }, [contractAddress, address]);
+
+  // Auto-refresh leaderboard every 5 seconds
+  useEffect(() => {
+    refetchLeaderboard();
+    const interval = setInterval(refetchLeaderboard, 5000);
     return () => clearInterval(interval);
   }, [contractAddress]);
 
@@ -425,8 +517,8 @@ export function useGameContractSecured() {
     hash: effectiveHash,
 
     // Read data
-    playerData: playerData as { highScore: bigint; totalGamesPlayed: bigint; extraLivesPurchased: bigint; totalSpent: bigint } | undefined,
-    leaderboard: leaderboard as [readonly `0x${string}`[], readonly bigint[]] | undefined,
+    playerData,
+    leaderboard,
     extraLifePrice,
     contractBalance,
     contractOwner,
