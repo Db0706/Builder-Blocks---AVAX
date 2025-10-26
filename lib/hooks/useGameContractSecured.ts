@@ -246,6 +246,8 @@ export function useGameContractSecured() {
     query: {
       enabled: !!contractAddress,
       refetchInterval: 5000,
+      gcTime: 0, // Don't cache balance data
+      staleTime: 0, // Always consider data stale
     },
   });
 
