@@ -44,21 +44,37 @@ export function ArenaProvider({ children }: { children: ReactNode }) {
           const sdk = getArenaSDK();
           console.log('✅ Arena SDK initialized');
 
-          // IMPORTANT: Connect the Arena provider first
-          if (sdk.provider) {
-            console.log('🔌 Connecting Arena provider...');
-            try {
-              // Call connect() on the provider to establish connection
+          // IMPORTANT: Request wallet connection from Arena
+          console.log('🔌 Requesting Arena wallet connection...');
+          try {
+            // Request wallet connection through Arena SDK
+            const walletResult = await sdk.sendRequest('connectWallet');
+            console.log('✅ Arena wallet connection result:', walletResult);
+
+            // After connection, the provider should be available
+            if (sdk.provider) {
+              console.log('✅ Arena provider now available:', sdk.provider);
+
+              // Try to connect the provider if it has a connect method
               if (typeof sdk.provider.connect === 'function') {
                 await sdk.provider.connect();
                 console.log('✅ Arena provider connected');
               } else if (typeof sdk.provider.request === 'function') {
-                // Try requesting accounts as an alternative connect method
+                // Try requesting accounts
                 const accounts = await sdk.provider.request({ method: 'eth_requestAccounts' });
-                console.log('✅ Arena provider connected via eth_requestAccounts:', accounts);
+                console.log('✅ Arena accounts:', accounts);
               }
-            } catch (connectError) {
-              console.error('❌ Failed to connect Arena provider:', connectError);
+            }
+          } catch (connectError) {
+            console.error('❌ Failed to request Arena wallet:', connectError);
+            // Try fallback if connectWallet doesn't work
+            if (sdk.provider && typeof sdk.provider.request === 'function') {
+              try {
+                const accounts = await sdk.provider.request({ method: 'eth_requestAccounts' });
+                console.log('✅ Arena accounts via fallback:', accounts);
+              } catch (fallbackError) {
+                console.error('❌ Fallback also failed:', fallbackError);
+              }
             }
           }
 
