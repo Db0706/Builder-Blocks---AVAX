@@ -6,23 +6,16 @@ import { parseEther, encodeFunctionData, createWalletClient, custom } from 'viem
 import { TOWER_BLOCKS_ABI_SECURED, CONTRACT_ADDRESSES } from '../contract-abi-secured';
 import { requestScoreSignature } from '../api/score-signing';
 import { getArenaSDK, isRunningInArena } from '../arena-sdk';
+import { avalanche, avalancheFuji } from '../avalanche-config';
 
 export function useGameContractSecured() {
   const { address, chain } = useAccount();
-  const contractAddress = chain?.id ? CONTRACT_ADDRESSES[chain.id as keyof typeof CONTRACT_ADDRESSES] : undefined;
-  const inArena = isRunningInArena();
 
-  // Debug logging
-  useEffect(() => {
-    console.log('🔍 Contract Hook State:', {
-      address,
-      chainId: chain?.id,
-      chainName: chain?.name,
-      contractAddress,
-      inArena,
-      availableChains: Object.keys(CONTRACT_ADDRESSES)
-    });
-  }, [address, chain, contractAddress, inArena]);
+  // Default to mainnet if no chain detected (Arena usually uses mainnet)
+  const chainId = chain?.id || 43114;
+  const chainConfig = chain || avalanche; // Use mainnet config as fallback
+  const contractAddress = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES];
+  const inArena = isRunningInArena();
 
   // State for Arena transactions
   const [arenaHash, setArenaHash] = useState<`0x${string}` | undefined>();
@@ -51,7 +44,6 @@ export function useGameContractSecured() {
   const buyExtraLife = async () => {
     if (!contractAddress) throw new Error('Contract not deployed on this chain');
     if (!address) throw new Error('Wallet not connected');
-    if (!chain) throw new Error('Chain not detected');
 
     // Check if Arena provider is actually available
     const sdk = inArena ? getArenaSDK() : null;
@@ -65,7 +57,7 @@ export function useGameContractSecured() {
       try {
         const walletClient = createWalletClient({
           account: address,
-          chain: chain,
+          chain: chainConfig,
           transport: custom(sdk.provider as any),
         });
 
@@ -100,11 +92,10 @@ export function useGameContractSecured() {
 
   // Submit score WITH SIGNATURE
   const submitScore = async (score: number) => {
-    console.log('📊 submitScore called with:', { score, address, contractAddress, chain: chain?.id, inArena });
+    console.log('📊 submitScore called with:', { score, address, contractAddress, chainId, inArena });
 
     if (!contractAddress) throw new Error('Contract not deployed on this chain');
     if (!address) throw new Error('Wallet not connected');
-    if (!chain) throw new Error('Chain not detected');
 
     try {
       // Request signature from backend
@@ -126,7 +117,7 @@ export function useGameContractSecured() {
         try {
           const walletClient = createWalletClient({
             account: address,
-            chain: chain,
+            chain: chainConfig,
             transport: custom(sdk.provider as any),
           });
 
