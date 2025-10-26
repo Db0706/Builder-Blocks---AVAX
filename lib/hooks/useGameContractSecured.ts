@@ -81,6 +81,7 @@ export function useGameContractSecured() {
             if (refetchPlayerData) refetchPlayerData();
             if (refetchLeaderboard) refetchLeaderboard();
             if (refetchBalance) refetchBalance();
+            if (refetchPrizeAmounts) refetchPrizeAmounts();
           }, 500);
         } else if (data.result && data.result.status === '0x0') {
           console.error('❌ Arena transaction failed on-chain');
@@ -457,6 +458,13 @@ export function useGameContractSecured() {
     return () => clearInterval(interval);
   }, [contractAddress]);
 
+  // Auto-refresh prize amounts every 5 seconds (updates when balance changes)
+  useEffect(() => {
+    refetchPrizeAmounts();
+    const interval = setInterval(refetchPrizeAmounts, 5000);
+    return () => clearInterval(interval);
+  }, [contractAddress]);
+
   // DEBUG: Log contract balance
   useEffect(() => {
     if (contractBalance !== undefined) {
@@ -478,16 +486,49 @@ export function useGameContractSecured() {
     },
   });
 
-  // Read prize amounts
-  const { data: prizeAmounts, refetch: refetchPrizeAmounts } = useReadContract({
-    address: contractAddress as `0x${string}`,
-    abi: TOWER_BLOCKS_ABI_SECURED,
-    functionName: 'getPrizeAmounts',
-    query: {
-      enabled: !!contractAddress,
-      refetchInterval: 5000,
-    },
-  });
+  // Manual RPC fetch for prize amounts (to avoid wagmi caching in Arena)
+  const [prizeAmounts, setPrizeAmounts] = useState<readonly bigint[] | undefined>();
+
+  const refetchPrizeAmounts = async () => {
+    if (!contractAddress) return;
+
+    try {
+      // Encode getPrizeAmounts() call
+      const data = encodeFunctionData({
+        abi: TOWER_BLOCKS_ABI_SECURED,
+        functionName: 'getPrizeAmounts',
+      });
+
+      const response = await fetch('https://api.avax.network/ext/bc/C/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_call',
+          params: [{
+            to: contractAddress,
+            data: data,
+          }, 'latest'],
+          id: Date.now(),
+        }),
+      });
+
+      const result = await response.json();
+      if (result.result && result.result !== '0x') {
+        // Decode the result - returns uint256[5]
+        const { decodeAbiParameters } = await import('viem');
+        const decoded = decodeAbiParameters(
+          [{ name: 'prizes', type: 'uint256[5]' }],
+          result.result as `0x${string}`
+        );
+
+        setPrizeAmounts(decoded[0] as readonly bigint[]);
+        console.log('💰 Prize amounts fetched:', decoded[0].map(p => (Number(p) / 1e18).toFixed(4)));
+      }
+    } catch (error) {
+      console.error('Failed to fetch prize amounts:', error);
+    }
+  };
 
   // Read pending withdrawal for current user
   const { data: pendingWithdrawal, refetch: refetchPendingWithdrawal } = useReadContract({
@@ -522,7 +563,7 @@ export function useGameContractSecured() {
     extraLifePrice,
     contractBalance,
     contractOwner,
-    prizeAmounts: prizeAmounts as readonly bigint[] | undefined,
+    prizeAmounts,
     pendingWithdrawal,
 
     // Refetch functions
