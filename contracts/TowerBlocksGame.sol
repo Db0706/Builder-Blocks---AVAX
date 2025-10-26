@@ -33,6 +33,8 @@ contract TowerBlocksGame {
     event ScoreSubmitted(address indexed player, uint256 score, uint256 timestamp);
     event HighScoreUpdated(address indexed player, uint256 oldScore, uint256 newScore);
     event Withdrawal(address indexed owner, uint256 amount);
+    event PrizesDistributed(uint256 totalPrizePool, uint256 timestamp);
+    event PrizeAwarded(address indexed player, uint256 position, uint256 amount);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can call this");
@@ -166,7 +168,48 @@ contract TowerBlocksGame {
     }
 
     /**
-     * @notice Withdraw accumulated AVAX (owner only)
+     * @notice Distribute prizes to top 5 leaderboard players (owner only)
+     * @dev Distributes 50% of contract balance to top 5 players
+     * Prize breakdown: 1st=20%, 2nd=12%, 3rd=9%, 4th=6%, 5th=3% of total pot
+     */
+    function distributePrizes() external onlyOwner {
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No balance to distribute");
+        require(leaderboard.length > 0, "No players on leaderboard");
+
+        // Prize percentages (in basis points, 1% = 100)
+        uint256[5] memory prizePercentages = [
+            uint256(2000), // 1st: 20%
+            uint256(1200), // 2nd: 12%
+            uint256(900),  // 3rd: 9%
+            uint256(600),  // 4th: 6%
+            uint256(300)   // 5th: 3%
+        ];
+
+        uint256 totalDistributed = 0;
+
+        // Distribute to top 5 (or less if leaderboard is smaller)
+        uint256 maxWinners = leaderboard.length < 5 ? leaderboard.length : 5;
+
+        for (uint256 i = 0; i < maxWinners; i++) {
+            address winner = leaderboard[i];
+            uint256 prize = (balance * prizePercentages[i]) / 10000;
+
+            if (prize > 0) {
+                (bool success, ) = winner.call{value: prize}("");
+                require(success, "Prize transfer failed");
+
+                totalDistributed += prize;
+                emit PrizeAwarded(winner, i + 1, prize);
+            }
+        }
+
+        emit PrizesDistributed(totalDistributed, block.timestamp);
+    }
+
+    /**
+     * @notice Withdraw remaining AVAX after prize distribution (owner only)
+     * @dev Allows owner to withdraw the house's 50% share
      */
     function withdraw() external onlyOwner {
         uint256 balance = address(this).balance;
@@ -183,6 +226,28 @@ contract TowerBlocksGame {
      */
     function getBalance() external view returns (uint256) {
         return address(this).balance;
+    }
+
+    /**
+     * @notice Get prize amounts for top 5 positions based on current balance
+     * @return Array of prize amounts [1st, 2nd, 3rd, 4th, 5th]
+     */
+    function getPrizeAmounts() external view returns (uint256[5] memory) {
+        uint256 balance = address(this).balance;
+        uint256[5] memory prizePercentages = [
+            uint256(2000), // 1st: 20%
+            uint256(1200), // 2nd: 12%
+            uint256(900),  // 3rd: 9%
+            uint256(600),  // 4th: 6%
+            uint256(300)   // 5th: 3%
+        ];
+
+        uint256[5] memory prizes;
+        for (uint256 i = 0; i < 5; i++) {
+            prizes[i] = (balance * prizePercentages[i]) / 10000;
+        }
+
+        return prizes;
     }
 
     /**

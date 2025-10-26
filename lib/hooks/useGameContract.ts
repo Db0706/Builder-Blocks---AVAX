@@ -36,6 +36,17 @@ export function useGameContract() {
     });
   };
 
+  // Distribute prizes (owner only)
+  const distributePrizes = async () => {
+    if (!contractAddress) throw new Error('Contract not deployed on this chain');
+
+    return writeContract({
+      address: contractAddress as `0x${string}`,
+      abi: TOWER_BLOCKS_ABI,
+      functionName: 'distributePrizes',
+    });
+  };
+
   // Withdraw funds (owner only)
   const withdraw = async () => {
     if (!contractAddress) throw new Error('Contract not deployed on this chain');
@@ -55,6 +66,7 @@ export function useGameContract() {
     args: address ? [address] : undefined,
     query: {
       enabled: !!address && !!contractAddress,
+      refetchInterval: 5000, // Refetch every 5 seconds
     },
   });
 
@@ -65,6 +77,7 @@ export function useGameContract() {
     functionName: 'getLeaderboard',
     query: {
       enabled: !!contractAddress,
+      refetchInterval: 5000, // Refetch every 5 seconds
     },
   });
 
@@ -85,6 +98,7 @@ export function useGameContract() {
     functionName: 'getBalance',
     query: {
       enabled: !!contractAddress,
+      refetchInterval: 5000, // Refetch every 5 seconds
     },
   });
 
@@ -98,10 +112,22 @@ export function useGameContract() {
     },
   });
 
+  // Read prize amounts
+  const { data: prizeAmounts, refetch: refetchPrizeAmounts } = useReadContract({
+    address: contractAddress as `0x${string}`,
+    abi: TOWER_BLOCKS_ABI,
+    functionName: 'getPrizeAmounts',
+    query: {
+      enabled: !!contractAddress,
+      refetchInterval: 5000, // Refetch every 5 seconds
+    },
+  });
+
   return {
     // Write functions
     buyExtraLife,
     submitScore,
+    distributePrizes,
     withdraw,
 
     // Transaction state
@@ -117,11 +143,13 @@ export function useGameContract() {
     extraLifePrice,
     contractBalance,
     contractOwner,
+    prizeAmounts: prizeAmounts as readonly bigint[] | undefined,
 
     // Refetch functions
     refetchPlayerData,
     refetchLeaderboard,
     refetchBalance,
+    refetchPrizeAmounts,
 
     // Contract info
     contractAddress,

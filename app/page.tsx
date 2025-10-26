@@ -1,30 +1,24 @@
 "use client";
 
 import TowerBlocks from "@/components/TowerBlocks";
-import Leaderboard from "@/components/Leaderboard";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import LeaderboardSecured from "@/components/LeaderboardSecured";
 import { useAccount } from "wagmi";
-import { useState, useEffect } from "react";
-import { useGameContract } from "@/lib/hooks/useGameContract";
+import { useState } from "react";
+import { useGameContractSecured } from "@/lib/hooks/useGameContractSecured";
 import { formatEther } from "viem";
-import { isMobileDevice } from "@/lib/utils";
+import { useArena } from "@/components/ArenaProvider";
 
 export default function Home() {
   const { isConnected, address } = useAccount();
+  const { isInArena, arenaWalletAddress, arenaProfile, isLoading } = useArena();
   const [currentScore, setCurrentScore] = useState(0);
-  const [showMobileWarning, setShowMobileWarning] = useState(false);
-  const [hasCheckedDevice, setHasCheckedDevice] = useState(false);
-  const { withdraw, contractBalance, contractOwner, refetchBalance, isPending, isConfirming } = useGameContract();
+  const { withdraw, contractBalance, contractOwner, refetchBalance, isPending, isConfirming } = useGameContractSecured();
 
-  const isOwner = address && contractOwner && address.toLowerCase() === contractOwner.toLowerCase();
+  // Use Arena wallet if in Arena, otherwise use wagmi wallet
+  const effectiveAddress = arenaWalletAddress || address;
+  const effectiveConnected = isInArena ? !!arenaWalletAddress : isConnected;
 
-  useEffect(() => {
-    if (!hasCheckedDevice) {
-      const isMobile = isMobileDevice();
-      setShowMobileWarning(!isMobile);
-      setHasCheckedDevice(true);
-    }
-  }, [hasCheckedDevice]);
+  const isOwner = effectiveAddress && contractOwner && effectiveAddress.toLowerCase() === contractOwner.toLowerCase();
 
   const handleWithdraw = async () => {
     try {
@@ -37,34 +31,6 @@ export default function Home() {
 
   return (
     <>
-      {/* Mobile Warning Modal */}
-      {showMobileWarning && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm">
-          <div className="bg-gradient-to-br from-zinc-900 to-black border-2 border-orange-500/50 rounded-2xl p-8 max-w-md mx-4 text-center">
-            <div className="mb-6">
-              <span className="text-6xl">📱</span>
-            </div>
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent mb-4">
-              Best Enjoyed on Mobile
-            </h2>
-            <p className="text-gray-400 text-sm mb-6">
-              Builder Blocks is optimized for mobile devices. For the best experience, we recommend playing on your phone or tablet.
-            </p>
-            <div className="space-y-3">
-              <button
-                onClick={() => setShowMobileWarning(false)}
-                className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold py-3 px-6 rounded-lg transition-all shadow-lg"
-              >
-                Continue on Desktop
-              </button>
-              <p className="text-gray-500 text-xs">
-                Or scan QR code on mobile (coming soon)
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Sticky App Bar */}
       <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b border-orange-500/30">
         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center gap-4">
@@ -76,9 +42,29 @@ export default function Home() {
             />
           </div>
           <div className="flex-shrink-0">
-            <div className="scale-90 origin-right">
-              <ConnectButton />
-            </div>
+            {effectiveConnected && effectiveAddress ? (
+              <div className="bg-gradient-to-r from-orange-500/20 to-amber-500/20 border border-orange-500/50 rounded-lg px-4 py-2">
+                <div className="flex items-center gap-2">
+                  {isInArena && arenaProfile?.username && (
+                    <span className="text-orange-300 text-sm font-medium">
+                      @{arenaProfile.username}
+                    </span>
+                  )}
+                  <span className="text-white text-sm font-mono">
+                    {effectiveAddress.slice(0, 6)}...{effectiveAddress.slice(-4)}
+                  </span>
+                  {isInArena && (
+                    <span className="text-xs text-orange-400">🎮</span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg px-4 py-2">
+                <span className="text-orange-300 text-sm">
+                  {isInArena ? 'Connecting...' : 'Wallet Required'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -95,11 +81,13 @@ export default function Home() {
         </div>
 
         {/* Connection Status */}
-        {!isConnected && (
+        {!effectiveConnected && !isLoading && (
           <div className="mb-6 bg-orange-950/30 border border-orange-500/30 rounded-lg p-4 backdrop-blur-sm">
             <p className="text-orange-300 text-sm text-center">
-              ⚠️ Connect your wallet to buy extra lives and save scores
-              on-chain!
+              {isInArena
+                ? '🎮 Connecting to Arena wallet...'
+                : '⚠️ This app must be played inside Arena platform'
+              }
             </p>
           </div>
         )}
@@ -113,7 +101,7 @@ export default function Home() {
 
           {/* Leaderboard Section */}
           <div className="flex flex-col items-center lg:items-start">
-            <Leaderboard />
+            <LeaderboardSecured />
 
             {/* Game Features */}
             <div className="mt-8 bg-zinc-900/60 border border-orange-500/30 rounded-[18px] p-6 backdrop-blur-sm w-full max-w-md">
@@ -150,22 +138,6 @@ export default function Home() {
                   </div>
                 </li>
               </ul>
-            </div>
-
-            {/* Faucet Link */}
-            <div className="mt-6 bg-zinc-900/60 border border-orange-500/30 rounded-lg p-4 w-full max-w-md backdrop-blur-sm">
-              <p className="text-orange-300 text-xs text-center">
-                ℹ️ Playing on Avalanche Fuji Testnet
-                <br />
-                <a
-                  href="https://faucet.avax.network/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-orange-200 transition-colors font-semibold"
-                >
-                  Get free testnet AVAX from faucet
-                </a>
-              </p>
             </div>
 
             {/* Project Funds Display */}

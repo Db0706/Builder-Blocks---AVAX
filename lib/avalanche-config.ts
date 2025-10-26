@@ -10,8 +10,22 @@ export const avalanche: Chain = {
     symbol: 'AVAX',
   },
   rpcUrls: {
-    default: { http: ['https://api.avax.network/ext/bc/C/rpc'] },
-    public: { http: ['https://api.avax.network/ext/bc/C/rpc'] },
+    default: {
+      http: [
+        'https://avalanche-c-chain-rpc.publicnode.com',
+        'https://api.avax.network/ext/bc/C/rpc',
+        'https://rpc.ankr.com/avalanche',
+        'https://ava-mainnet.public.blastapi.io/ext/bc/C/rpc',
+      ]
+    },
+    public: {
+      http: [
+        'https://avalanche-c-chain-rpc.publicnode.com',
+        'https://api.avax.network/ext/bc/C/rpc',
+        'https://rpc.ankr.com/avalanche',
+        'https://ava-mainnet.public.blastapi.io/ext/bc/C/rpc',
+      ]
+    },
   },
   blockExplorers: {
     default: { name: 'SnowTrace', url: 'https://snowtrace.io' },
@@ -34,8 +48,22 @@ export const avalancheFuji: Chain = {
     symbol: 'AVAX',
   },
   rpcUrls: {
-    default: { http: ['https://api.avax-test.network/ext/bc/C/rpc'] },
-    public: { http: ['https://api.avax-test.network/ext/bc/C/rpc'] },
+    default: {
+      http: [
+        'https://avalanche-fuji-c-chain-rpc.publicnode.com',
+        'https://api.avax-test.network/ext/bc/C/rpc',
+        'https://rpc.ankr.com/avalanche_fuji',
+        'https://ava-testnet.public.blastapi.io/ext/bc/C/rpc',
+      ]
+    },
+    public: {
+      http: [
+        'https://avalanche-fuji-c-chain-rpc.publicnode.com',
+        'https://api.avax-test.network/ext/bc/C/rpc',
+        'https://rpc.ankr.com/avalanche_fuji',
+        'https://ava-testnet.public.blastapi.io/ext/bc/C/rpc',
+      ]
+    },
   },
   blockExplorers: {
     default: { name: 'SnowTrace', url: 'https://testnet.snowtrace.io' },

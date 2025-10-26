@@ -1,11 +1,19 @@
 'use client';
 
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { createConfig, http } from 'wagmi';
 import { avalanche, avalancheFuji } from './avalanche-config';
+import { arenaConnector } from './arena-connector';
+import { injected } from 'wagmi/connectors';
 
-export const config = getDefaultConfig({
-  appName: 'Tower Blocks AVAX',
-  projectId: 'faeac2f6960ca82510491391ac612e5f', // Got from https://cloud.walletconnect.com
+export const config = createConfig({
   chains: [avalancheFuji, avalanche],
+  connectors: [
+    arenaConnector(), // Uses Arena SDK provider (when available in production)
+    injected(), // Fallback for local development with Core/MetaMask
+  ],
+  transports: {
+    [avalancheFuji.id]: http(),
+    [avalanche.id]: http(),
+  },
   ssr: true,
 });

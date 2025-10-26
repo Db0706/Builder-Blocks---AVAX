@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { useGameContract } from "@/lib/hooks/useGameContract";
+import { useGameContractSecured } from "@/lib/hooks/useGameContractSecured";
 import { useAccount } from "wagmi";
 import { formatEther } from "viem";
 
@@ -38,7 +38,7 @@ const DROP_SPEED = 9.5;
 const STEP_Y = TOP_THICK + 18;
 const PERFECT_TOL = 3;
 const CAMERA_START_ROW = 7;
-const CAMERA_RISE = STEP_Y * 1.2;
+const CAMERA_RISE = STEP_Y; // Match camera movement to block spacing
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 function colorTop(h: number) { return `#1a1a1a`; }
@@ -58,6 +58,7 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
   const [showExtraLifeModal, setShowExtraLifeModal] = useState(false);
   const [deathPosition, setDeathPosition] = useState<{ row: number; x: number; w: number; hue: number } | null>(null);
   const [isSubmittingScore, setIsSubmittingScore] = useState(false);
+  const [isBuyingExtraLife, setIsBuyingExtraLife] = useState(false);
   const lastProcessedHashRef = useRef<string | null>(null);
   const scoreSubmissionHashRef = useRef<string | null>(null);
 
@@ -73,7 +74,8 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
     playerData,
     refetchPlayerData,
     refetchLeaderboard,
-  } = useGameContract();
+    refetchBalance,
+  } = useGameContractSecured();
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -89,6 +91,13 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
       setBest(prev => Math.max(prev, chainScore));
     }
   }, [playerData]);
+
+  // Notify parent of score changes
+  useEffect(() => {
+    if (onScoreUpdate) {
+      onScoreUpdate(score);
+    }
+  }, [score, onScoreUpdate]);
 
   const state = useRef({
     blocks: [] as Block[],
@@ -161,28 +170,59 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
   }, [deathPosition]);
 
   // Handle extra life purchase
-  const handleBuyExtraLife = async () => {
+  const handleBuyExtraLife = () => {
+    console.log('🎮 Buy Extra Life clicked');
+    console.log('States:', {
+      isConnected,
+      isBuyingExtraLife,
+      isSubmittingScore,
+      isPending,
+      isConfirming
+    });
+
     if (!isConnected) {
       alert("Please connect your wallet first!");
       return;
     }
 
+    if (isPending || isConfirming) {
+      console.warn('⚠️ Transaction already in progress');
+      return;
+    }
+
     try {
-      await buyExtraLife();
+      // Reset ALL flags before starting
+      console.log('💳 Initiating extra life purchase...');
+      setIsSubmittingScore(false);
+      setIsBuyingExtraLife(true);
+      lastProcessedHashRef.current = null;
+      buyExtraLife();
     } catch (error) {
-      console.error("Failed to buy extra life:", error);
+      console.error("❌ Failed to buy extra life:", error);
+      setIsBuyingExtraLife(false);
     }
   };
 
-  // Monitor transaction success
+  // Monitor extra life purchase transaction success
   useEffect(() => {
-    // Only continue if we have a new successful transaction (hash changed)
-    if (isSuccess && showExtraLifeModal && hash && hash !== lastProcessedHashRef.current) {
+    // ONLY run if buying extra life (not submitting score!)
+    if (isBuyingExtraLife && !isSubmittingScore && isSuccess && hash && hash !== lastProcessedHashRef.current) {
+      console.log('✅ Extra life purchase confirmed! Hash:', hash);
       lastProcessedHashRef.current = hash; // Mark this transaction as processed
+      setIsBuyingExtraLife(false);
       refetchPlayerData();
-      continueWithExtraLife();
+      refetchBalance(); // Update contract balance in UI
+      continueWithExtraLife(); // Continue game from death position
     }
-  }, [isSuccess, showExtraLifeModal, hash, continueWithExtraLife, refetchPlayerData]);
+  }, [isBuyingExtraLife, isSubmittingScore, isSuccess, hash, continueWithExtraLife, refetchPlayerData, refetchBalance]);
+
+  // Reset states when transaction is no longer pending
+  useEffect(() => {
+    if (!isPending && !isConfirming) {
+      // Transaction completed (either success or failure)
+      console.log('Transaction state reset - isPending:', isPending, 'isConfirming:', isConfirming);
+    }
+  }, [isPending, isConfirming]);
 
   // Drop block
   const drop = useCallback(() => {
@@ -229,6 +269,16 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
 
   // Submit score and start new game
   const handleSubmitScoreAndPlayAgain = useCallback(async () => {
+    console.log('📊 Submit Score clicked');
+    console.log('States:', {
+      isConnected,
+      score,
+      isBuyingExtraLife,
+      isSubmittingScore,
+      isPending,
+      isConfirming
+    });
+
     if (!isConnected) {
       alert("Please connect your wallet first!");
       return;
@@ -239,37 +289,48 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
       return;
     }
 
+    if (isPending || isConfirming) {
+      console.warn('⚠️ Transaction already in progress');
+      return;
+    }
+
     try {
-      // Mark that we're submitting score
+      // Reset ALL flags before starting
+      console.log('📝 Initiating score submission...');
+      setIsBuyingExtraLife(false);
       setIsSubmittingScore(true);
       scoreSubmissionHashRef.current = null;
       // Submit score - this will trigger wallet popup
       await submitScoreToChain(score);
     } catch (error) {
-      console.error("Failed to submit score:", error);
+      console.error("❌ Failed to submit score:", error);
       setIsSubmittingScore(false);
       // Even if error, allow user to continue
+      setShowExtraLifeModal(false);
       reset();
     }
-  }, [isConnected, score, submitScoreToChain, reset]);
+  }, [isConnected, score, submitScoreToChain, reset, isBuyingExtraLife, isSubmittingScore, isPending, isConfirming]);
 
   // Monitor score submission transaction success
   useEffect(() => {
-    if (isSubmittingScore && isSuccess && hash && hash !== scoreSubmissionHashRef.current) {
+    // ONLY run if submitting score (not buying extra life!)
+    if (isSubmittingScore && !isBuyingExtraLife && isSuccess && hash && hash !== scoreSubmissionHashRef.current) {
       scoreSubmissionHashRef.current = hash;
 
-      // Wait for transaction confirmation, then refresh leaderboard
+      // Wait for transaction confirmation, then refresh leaderboard and close modal
       const refreshAndReset = async () => {
         await refetchPlayerData();
         await refetchLeaderboard();
+        await refetchBalance(); // Update contract balance in UI
         setIsSubmittingScore(false);
-        reset();
+        setShowExtraLifeModal(false); // Close the modal
+        reset(); // Start new game
       };
 
       // Small delay to ensure blockchain state is updated
       setTimeout(refreshAndReset, 1500);
     }
-  }, [isSubmittingScore, isSuccess, hash, refetchPlayerData, refetchLeaderboard, reset]);
+  }, [isSubmittingScore, isBuyingExtraLife, isSuccess, hash, refetchPlayerData, refetchLeaderboard, refetchBalance, reset]);
 
   // Handle game over - no automatic submission
   const handleGameOver = useCallback(async (finalScore: number) => {
@@ -459,11 +520,7 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
       S.blocks.push(next);
 
       S.speed += SPEED_GAIN;
-      setScore(v => {
-        const newScore = v + 1;
-        if (onScoreUpdate) onScoreUpdate(newScore);
-        return newScore;
-      });
+      setScore(v => v + 1);
 
       if (next.row > CAMERA_START_ROW) {
         S.cameraTarget = (next.row - CAMERA_START_ROW) * CAMERA_RISE;
@@ -568,7 +625,7 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [running, best, score, showExtraLifeModal, handleGameOver, onScoreUpdate]);
+  }, [running, best, score, showExtraLifeModal, handleGameOver]);
 
   return (
     <div className="relative">
@@ -593,10 +650,10 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
               <div className="space-y-3">
                 <button
                   onClick={handleBuyExtraLife}
-                  disabled={isPending || isConfirming}
+                  disabled={isBuyingExtraLife || isSubmittingScore}
                   className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold py-4 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
                 >
-                  {isPending || isConfirming ? (
+                  {isBuyingExtraLife ? (
                     <span className="flex items-center justify-center">
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -610,16 +667,16 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
                 </button>
                 <button
                   onClick={handleSubmitScoreAndPlayAgain}
-                  disabled={isPending || isConfirming || isSubmittingScore}
+                  disabled={isBuyingExtraLife || isSubmittingScore}
                   className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold py-4 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
                 >
-                  {isPending || isConfirming || isSubmittingScore ? (
+                  {isSubmittingScore ? (
                     <span className="flex items-center justify-center">
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      {isConfirming || (isSubmittingScore && isSuccess) ? "Confirming & Updating Leaderboard..." : "Submitting Score..."}
+                      Submitting Score & Updating Leaderboard...
                     </span>
                   ) : (
                     "Submit Score & Play Again"
