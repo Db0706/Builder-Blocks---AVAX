@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useGameContractSecured } from "@/lib/hooks/useGameContractSecured";
 import { useAccount } from "wagmi";
 import { formatEther } from "viem";
+import { useArena } from "@/components/ArenaProvider";
 
 type Block = {
   x: number;
@@ -64,6 +65,7 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
 
   // Blockchain hooks
   const { address, isConnected } = useAccount();
+  const { arenaWalletAddress } = useArena();
   const {
     buyExtraLife,
     submitScore: submitScoreToChain,
@@ -76,6 +78,9 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
     refetchLeaderboard,
     refetchBalance,
   } = useGameContractSecured();
+
+  // Check if wallet is connected (either wagmi or Arena)
+  const effectiveConnected = !!(arenaWalletAddress || (isConnected && address));
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -173,14 +178,14 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
   const handleBuyExtraLife = () => {
     console.log('🎮 Buy Extra Life clicked');
     console.log('States:', {
-      isConnected,
+      effectiveConnected,
       isBuyingExtraLife,
       isSubmittingScore,
       isPending,
       isConfirming
     });
 
-    if (!isConnected) {
+    if (!effectiveConnected) {
       alert("Please connect your wallet first!");
       return;
     }
@@ -271,7 +276,7 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
   const handleSubmitScoreAndPlayAgain = useCallback(async () => {
     console.log('📊 Submit Score clicked');
     console.log('States:', {
-      isConnected,
+      effectiveConnected,
       score,
       isBuyingExtraLife,
       isSubmittingScore,
@@ -279,7 +284,7 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
       isConfirming
     });
 
-    if (!isConnected) {
+    if (!effectiveConnected) {
       alert("Please connect your wallet first!");
       return;
     }
@@ -309,7 +314,7 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
       setShowExtraLifeModal(false);
       reset();
     }
-  }, [isConnected, score, submitScoreToChain, reset, isBuyingExtraLife, isSubmittingScore, isPending, isConfirming]);
+  }, [effectiveConnected, score, submitScoreToChain, reset, isBuyingExtraLife, isSubmittingScore, isPending, isConfirming]);
 
   // Monitor score submission transaction success
   useEffect(() => {
@@ -646,7 +651,7 @@ export default function TowerBlocks({ onScoreUpdate }: TowerBlocksProps) {
               Buy an extra life with 0.1 AVAX to continue from where you died!
             </p>
 
-            {isConnected ? (
+            {effectiveConnected ? (
               <div className="space-y-3">
                 <button
                   onClick={handleBuyExtraLife}
