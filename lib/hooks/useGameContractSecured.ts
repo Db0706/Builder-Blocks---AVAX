@@ -12,6 +12,18 @@ export function useGameContractSecured() {
   const contractAddress = chain?.id ? CONTRACT_ADDRESSES[chain.id as keyof typeof CONTRACT_ADDRESSES] : undefined;
   const inArena = isRunningInArena();
 
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 Contract Hook State:', {
+      address,
+      chainId: chain?.id,
+      chainName: chain?.name,
+      contractAddress,
+      inArena,
+      availableChains: Object.keys(CONTRACT_ADDRESSES)
+    });
+  }, [address, chain, contractAddress, inArena]);
+
   // State for Arena transactions
   const [arenaHash, setArenaHash] = useState<`0x${string}` | undefined>();
   const [arenaIsPending, setArenaIsPending] = useState(false);
