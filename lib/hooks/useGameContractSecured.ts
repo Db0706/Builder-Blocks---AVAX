@@ -238,18 +238,41 @@ export function useGameContractSecured() {
     },
   });
 
-  // Read contract balance
-  const { data: contractBalance, refetch: refetchBalance } = useReadContract({
-    address: contractAddress as `0x${string}`,
-    abi: TOWER_BLOCKS_ABI_SECURED,
-    functionName: 'getBalance',
-    query: {
-      enabled: !!contractAddress,
-      refetchInterval: 5000,
-      gcTime: 0, // Don't cache balance data
-      staleTime: 0, // Always consider data stale
-    },
-  });
+  // Read contract balance - using direct balance check instead of contract function
+  const [contractBalance, setContractBalance] = useState<bigint | undefined>();
+
+  // Fetch balance directly via RPC to avoid caching issues
+  const refetchBalance = async () => {
+    if (!contractAddress) return;
+
+    try {
+      const response = await fetch('https://api.avax.network/ext/bc/C/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getBalance',
+          params: [contractAddress, 'latest'],
+          id: Date.now(), // Unique ID for cache-busting
+        }),
+      });
+
+      const data = await response.json();
+      if (data.result) {
+        const balance = BigInt(data.result);
+        setContractBalance(balance);
+      }
+    } catch (error) {
+      console.error('Failed to fetch contract balance:', error);
+    }
+  };
+
+  // Auto-refresh balance every 5 seconds
+  useEffect(() => {
+    refetchBalance();
+    const interval = setInterval(refetchBalance, 5000);
+    return () => clearInterval(interval);
+  }, [contractAddress]);
 
   // DEBUG: Log contract balance
   useEffect(() => {
