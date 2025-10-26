@@ -7,9 +7,14 @@ import { TOWER_BLOCKS_ABI_SECURED, CONTRACT_ADDRESSES } from '../contract-abi-se
 import { requestScoreSignature } from '../api/score-signing';
 import { getArenaSDK, isRunningInArena } from '../arena-sdk';
 import { avalanche, avalancheFuji } from '../avalanche-config';
+import { useArena } from '@/components/ArenaProvider';
 
 export function useGameContractSecured() {
-  const { address, chain } = useAccount();
+  const { address: wagmiAddress, chain } = useAccount();
+  const { arenaWalletAddress, isInArena } = useArena();
+
+  // Use Arena wallet when in Arena, otherwise use wagmi wallet
+  const address = isInArena ? arenaWalletAddress : wagmiAddress;
 
   // Default to mainnet if no chain detected (Arena usually uses mainnet)
   const chainId = chain?.id || 43114;
@@ -17,12 +22,15 @@ export function useGameContractSecured() {
   const contractAddress = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES];
   const inArena = isRunningInArena();
 
-  // DEBUG: Log contract info
+  // DEBUG: Log contract info and wallet
   console.log('🔍 CONTRACT DEBUG:', {
     chainId,
     chainName: chainId === 43114 ? 'Mainnet' : 'Fuji Testnet',
     contractAddress,
     inArena,
+    walletAddress: address,
+    arenaWallet: arenaWalletAddress,
+    wagmiWallet: wagmiAddress,
   });
 
   // State for Arena transactions
@@ -210,7 +218,7 @@ export function useGameContractSecured() {
     address: contractAddress as `0x${string}`,
     abi: TOWER_BLOCKS_ABI_SECURED,
     functionName: 'getPlayerData',
-    args: address ? [address] : undefined,
+    args: address ? [address as `0x${string}`] : undefined,
     query: {
       enabled: !!address && !!contractAddress,
       refetchInterval: 5000,
@@ -311,7 +319,7 @@ export function useGameContractSecured() {
     address: contractAddress as `0x${string}`,
     abi: TOWER_BLOCKS_ABI_SECURED,
     functionName: 'getPendingWithdrawal',
-    args: address ? [address] : undefined,
+    args: address ? [address as `0x${string}`] : undefined,
     query: {
       enabled: !!address && !!contractAddress,
       refetchInterval: 5000,

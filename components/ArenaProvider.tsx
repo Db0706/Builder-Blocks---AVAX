@@ -62,11 +62,34 @@ export function ArenaProvider({ children }: { children: ReactNode }) {
             setArenaWalletAddress(address);
           });
 
-          // Get initial wallet address
-          if (sdk.provider?.accounts?.[0]) {
-            const address = sdk.provider.accounts[0];
-            console.log('💰 Arena wallet address:', address);
-            setArenaWalletAddress(address);
+          // Get initial wallet address from Arena SDK
+          if (sdk.provider) {
+            try {
+              // Request accounts from Arena provider
+              const accounts = await sdk.provider.request({
+                method: 'eth_accounts',
+              }) as string[];
+
+              if (accounts && accounts.length > 0) {
+                const address = accounts[0];
+                console.log('💰 Arena wallet address from eth_accounts:', address);
+                setArenaWalletAddress(address);
+              } else {
+                console.warn('⚠️ No Arena accounts found - requesting eth_requestAccounts...');
+                // Try requesting account access
+                const requestedAccounts = await sdk.provider.request({
+                  method: 'eth_requestAccounts',
+                }) as string[];
+
+                if (requestedAccounts && requestedAccounts.length > 0) {
+                  const address = requestedAccounts[0];
+                  console.log('💰 Arena wallet address from eth_requestAccounts:', address);
+                  setArenaWalletAddress(address);
+                }
+              }
+            } catch (error) {
+              console.error('❌ Failed to get Arena wallet address:', error);
+            }
 
             // Connect wagmi to Arena provider using custom Arena connector
             try {
