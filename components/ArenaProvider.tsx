@@ -92,20 +92,7 @@ export function ArenaProvider({ children }: { children: ReactNode }) {
               console.error('❌ Failed to connect wagmi to Arena:', error);
             }
           } else {
-            console.warn('⚠️ No Arena provider available - Arena wallet will work in production');
-            console.log('💡 For local testing, please connect using your Core wallet (injected connector)');
-
-            // Try to connect to injected wallet for local development
-            try {
-              const injectedConn = connectors.find(c => c.id === 'injected');
-              if (injectedConn && !wagmiAddress) {
-                console.log('🔌 Connecting to injected wallet (Core) for local development...');
-                await connect({ connector: injectedConn });
-                console.log('✅ Connected to injected wallet');
-              }
-            } catch (error) {
-              console.warn('⚠️ Failed to auto-connect injected wallet:', error);
-            }
+            console.warn('⚠️ No Arena provider available - app will not function outside Arena platform');
           }
 
           setIsLoading(false);
