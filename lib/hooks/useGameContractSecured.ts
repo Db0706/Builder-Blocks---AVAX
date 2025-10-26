@@ -17,6 +17,14 @@ export function useGameContractSecured() {
   const contractAddress = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES];
   const inArena = isRunningInArena();
 
+  // DEBUG: Log contract info
+  console.log('🔍 CONTRACT DEBUG:', {
+    chainId,
+    chainName: chainId === 43114 ? 'Mainnet' : 'Fuji Testnet',
+    contractAddress,
+    inArena,
+  });
+
   // State for Arena transactions
   const [arenaHash, setArenaHash] = useState<`0x${string}` | undefined>();
   const [arenaIsPending, setArenaIsPending] = useState(false);
@@ -240,6 +248,17 @@ export function useGameContractSecured() {
       refetchInterval: 5000,
     },
   });
+
+  // DEBUG: Log contract balance
+  useEffect(() => {
+    if (contractBalance !== undefined) {
+      console.log('💰 CONTRACT BALANCE:', {
+        raw: contractBalance?.toString(),
+        avax: (Number(contractBalance) / 1e18).toFixed(4),
+        contractAddress,
+      });
+    }
+  }, [contractBalance, contractAddress]);
 
   // Read contract owner
   const { data: contractOwner } = useReadContract({
